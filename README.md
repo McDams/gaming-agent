@@ -79,4 +79,14 @@ Voir [NOTEBOOK.md](NOTEBOOK.md) pour l'historique des tentatives, y compris les 
 Lien : _à compléter_
 
 ## Ce qu'on ferait avec plus de temps
-_à compléter_
+- Passer à une représentation d'état plus riche (distance normalisée à la nourriture,
+  vision sur plusieurs cases dans chaque direction) ou à un DQN (réseau de neurones) pour
+  dépasser les limites d'une table Q sur un état binaire à 11 dimensions.
+- Complexifier la fonction de récompense (pénaliser les trajectoires qui s'éloignent
+  durablement de la nourriture, encourager la survie) une fois la version simple
+  validée, comme le suggère la consigne du projet.
+- Recherche d'hyperparamètres plus systématique (learning rate, gamma, vitesse de
+  décroissance d'epsilon) plutôt que la config par défaut réutilisée pour tous les essais
+  — voir le sweep multi-seeds dans le carnet d'essais, qui va dans ce sens pour la seed
+  mais pas encore pour les autres hyperparamètres.
+- Automatiser la capture vidéo de l'agent en action plutôt qu'une capture manuelle.
