@@ -10,7 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from agent.q_learning import QLearningAgent
+from agent.q_learning import ImprovedQLearningAgent
 from game.snake_env import SnakeEnv
 
 
@@ -22,7 +22,7 @@ def train(episodes=1000, run_name="run", seed=None):
         np.random.seed(seed)
 
     env = SnakeEnv(render=False)
-    agent = QLearningAgent()
+    agent = ImprovedQLearningAgent()
 
     scores = []
     best_score = -1

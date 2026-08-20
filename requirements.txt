@@ -1,3 +1,5 @@
-pygame>=2.5.0
+# This project is validated on Python 3.11.x on Windows.
+# Python 3.14 currently fails to build pygame because the Windows build expects distutils.
+pygame==2.5.2
 numpy>=1.24.0
 matplotlib>=3.7.0

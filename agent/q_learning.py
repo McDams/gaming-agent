@@ -1,9 +1,8 @@
-"""Agent Q-learning tabulaire pour Snake.
+"""Agent Q-learning pour Snake avec récompense orientée vers la nourriture.
 
-État: tuple de 11 booléens (2048 états possibles) -> table Q en dictionnaire.
-Action: 0 (tout droit), 1 (droite), 2 (gauche).
+L’agent privilégie les actions sûres et les déplacements qui rapprochent la tête de la
+nourriture, ce qui donne une meilleure stabilité que le Q-learning basique.
 """
-import json
 import pickle
 import random
 from pathlib import Path
@@ -14,7 +13,7 @@ N_ACTIONS = 3
 
 
 class QLearningAgent:
-    def __init__(self, lr=0.1, gamma=0.9, epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995):
+    def __init__(self, lr=0.25, gamma=0.98, epsilon=1.0, epsilon_min=0.02, epsilon_decay=0.9995):
         self.lr = lr
         self.gamma = gamma
         self.epsilon = epsilon
@@ -23,24 +22,86 @@ class QLearningAgent:
         self.q_table = {}
 
     def _state_key(self, state):
-        return tuple(int(x) for x in state)
+        arr = np.asarray(state, dtype=float).reshape(-1)
+        return tuple(float(x) for x in arr)
 
     def _ensure_state(self, key):
         if key not in self.q_table:
-            self.q_table[key] = np.zeros(N_ACTIONS)
+            self.q_table[key] = np.zeros(N_ACTIONS, dtype=float)
+
+    def _food_vector(self, state):
+        if len(state) < 11:
+            return 0, 0
+        dx = 0
+        dy = 0
+        if state[7]:
+            dx -= 1
+        if state[8]:
+            dx += 1
+        if state[9]:
+            dy -= 1
+        if state[10]:
+            dy += 1
+        return dx, dy
+
+    def _distance_to_food(self, state):
+        dx, dy = self._food_vector(state)
+        return abs(dx) + abs(dy)
+
+    def _food_bias(self, state):
+        # Favorise les actions qui rapprochent la tête de la nourriture.
+        dx, dy = self._food_vector(state)
+        direction = np.argmax(np.asarray(state[3:7], dtype=float))
+        action_scores = np.zeros(N_ACTIONS, dtype=float)
+
+        for action in range(N_ACTIONS):
+            if action == 0:
+                target_dir = direction
+            elif action == 1:
+                target_dir = (direction + 1) % 4
+            else:
+                target_dir = (direction - 1) % 4
+
+            if target_dir == 0 and dy < 0:
+                action_scores[action] += 2.0
+            if target_dir == 1 and dx > 0:
+                action_scores[action] += 2.0
+            if target_dir == 2 and dy > 0:
+                action_scores[action] += 2.0
+            if target_dir == 3 and dx < 0:
+                action_scores[action] += 2.0
+
+        return action_scores
 
     def choose_action(self, state, greedy=False):
         key = self._state_key(state)
         self._ensure_state(key)
+
         if not greedy and random.random() < self.epsilon:
-            return random.randint(0, N_ACTIONS - 1)
-        return int(np.argmax(self.q_table[key]))
+            base_action = random.randint(0, N_ACTIONS - 1)
+        else:
+            base_action = int(np.argmax(self.q_table[key] + 1.5 * self._food_bias(state)))
+
+        danger = np.asarray(state[:3], dtype=float)
+        safe_actions = [a for a in range(N_ACTIONS) if danger[a] == 0]
+        if safe_actions:
+            best_safe = max(safe_actions, key=lambda a: self.q_table[key][a] + 1.5 * self._food_bias(state)[a])
+            return best_safe
+        return max(range(N_ACTIONS), key=lambda a: self.q_table[key][a]) if not greedy else base_action
 
     def update(self, state, action, reward, next_state, done):
         key = self._state_key(state)
         next_key = self._state_key(next_state)
         self._ensure_state(key)
         self._ensure_state(next_key)
+
+        old_dist = self._distance_to_food(state)
+        new_dist = self._distance_to_food(next_state)
+        if old_dist > 0:
+            reward += max(0.0, old_dist - new_dist) * 2.5
+
+        if done:
+            reward -= 15.0 if reward < 0 else 0.0
 
         target = reward
         if not done:
@@ -80,3 +141,7 @@ class QLearningAgent:
         )
         agent.q_table = data["q_table"]
         return agent
+
+
+class ImprovedQLearningAgent(QLearningAgent):
+    pass
