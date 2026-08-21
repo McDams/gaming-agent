@@ -142,3 +142,73 @@ Inclure les tentatives ratées.
 - Meilleur agent retenu : seed 36 (eval_avg=42.15, eval_max=61 sur les 20 parties du
   sweep — revérifié sur un nouvel échantillon de 15 parties indépendant : moyenne 35.2,
   max 71). Copié dans `deliverable/`.
+
+## Essai 7 — Double Q-learning — RATÉ (mais instructif)
+- Date : 2026-08-21
+- Changement : `DoubleQLearningAgent` (`agent/q_learning.py`) — deux tables Q mises à jour
+  en alternance, chacune utilisant l'autre pour évaluer l'action choisie (corrige le biais
+  de surestimation classique du Q-learning simple). Même heuristique nourriture, même
+  filtre d'actions sûres, mêmes hyperparamètres que l'agent retenu (essai 6) : seule la
+  règle de mise à jour change.
+- Résultat (10 seeds x 3000 épisodes, seeds 1-10, même méthodologie que l'essai 6) :
+
+  | | eval_avg moyen | écart-type | train_best moyen | eval_avg max |
+  |---|---|---|---|---|
+  | Single Q-learning (agent retenu) | **29.34** | 6.76 | 55.70 | **37.70** |
+  | Double Q-learning | 27.73 | **2.31** | 57.20 | 30.65 |
+
+- Conclusion : Double Q-learning est nettement plus **régulier** (écart-type quasi divisé
+  par 3 — moins de scores catastrophiques), mais son score moyen et surtout son pic
+  restent en dessous du Q-learning simple. Explication probable : chaque table n'est mise
+  à jour qu'une fois sur deux, donc pour un même budget de 3000 épisodes chaque table voit
+  ~2x moins d'exemples — elle n'a sans doute pas eu le temps de rattraper. **Non retenu**,
+  faute de budget d'épisodes suffisant pour confirmer l'avantage de stabilité sur un
+  meilleur score.
+
+## Essai 8 — DQN (réseau de neurones) — RATÉ
+- Date : 2026-08-21
+- Changement : `DQNAgent` (`agent/dqn.py`, PyTorch CPU). Même état à 11 booléens et même
+  récompense façonnée par la distance à la nourriture que l'agent tabulaire, mais **sans**
+  l'heuristique de biais nourriture câblée en dur dans le choix d'action — le réseau doit
+  apprendre à chercher la nourriture uniquement à partir de la récompense. Réseau : 2
+  couches cachées de 64 neurones, replay buffer, réseau cible.
+- **Tentative 1 (naïve)**, 3000 épisodes, 1 seed : apprend vite au début (score moyen 0.2 →
+  16.76 en 500 épisodes, mieux que le hasard) mais **se dégrade ensuite en continu**
+  jusqu'à la fin de l'entraînement (16.76 → 9.06 sur les 50 derniers épisodes). Éval finale
+  greedy : moyenne 11.2, max 30 — net recul par rapport au tabulaire (42.15 / 61-70).
+  Symptôme classique d'instabilité DQN (surestimation, cible qui bouge trop vite, LR trop
+  agressif).
+- **Tentative 2 (correctifs ciblés)**, 10 000 épisodes (budget élargi, décidé après la
+  tentative 1), 1 seed : Double DQN (le réseau policy choisit l'action, le réseau cible
+  l'évalue — réduit la surestimation), mise à jour douce du réseau cible (Polyak, τ=0.01,
+  au lieu d'une synchronisation brutale toutes les 500 pas), learning rate réduit
+  (1e-3 → 2.5e-4), gradient clipping. Sauvegarde sur le meilleur checkpoint vu en éval
+  greedy périodique (comme pour l'agent tabulaire, essai 6).
+  - Résultat : meilleur checkpoint trouvé à l'épisode 2500 (eval_avg=29.80 en éval
+    périodique sur 10 parties). Score qui oscille ensuite entre ~10 et ~30 jusqu'à la fin
+    des 10 000 épisodes, **sans converger vers le haut**, y compris une fois epsilon au
+    minimum (dès l'épisode ~5000). Éval finale indépendante du meilleur checkpoint (20
+    parties) : moyenne 26.95, max 45, min 8.
+  - Comparaison :
+
+    | | Budget | eval_avg | eval_max |
+    |---|---|---|---|
+    | DQN naïf | 3000 ép. | 11.2 (en chute) | 30 |
+    | DQN corrigé | 10 000 ép. | **26.95** | 45 |
+    | Q-learning tabulaire (retenu) | 3000 ép. | **42.15** | 61-70 |
+
+- Conclusion : les correctifs aident clairement (26.95 contre 11.2, avec 3x moins de risque
+  de s'effondrer), mais même avec ~3x plus d'épisodes que le tabulaire, le DQN plafonne
+  nettement en dessous et n'a jamais vraiment convergé — juste oscillé autour d'un plateau
+  médiocre. Deux explications probables : (1) sans l'heuristique nourriture câblée en dur,
+  le réseau doit tout apprendre du signal de récompense seul, ce qui est plus dur à faire
+  converger en peu d'épisodes ; (2) un réseau de neurones sur un état binaire à 11
+  dimensions et seulement 3 actions n'a pas grand-chose à généraliser par rapport à une
+  table exhaustive de ≤2048 états — l'avantage habituel du DQN (généraliser sur un grand
+  espace d'états continu) ne s'exprime pas ici. **Non retenu** : l'agent tabulaire de
+  l'essai 6 reste le meilleur agent du projet (voir `deliverable/`).
+- Décision : on s'arrête là sur le DQN (budget de plus de 200 000 épisodes envisagé un
+  temps, mais estimé à 12h+ sur notre machine pour un seul run — hors de portée du calendrier
+  du projet, et Colab n'aurait pas aidé : ni le tabulaire ni ce DQN (réseau minuscule) ne
+  sont limités par du calcul matriciel qui bénéficierait d'un GPU, le goulot d'étranglement
+  est la boucle de simulation du jeu elle-même, séquentielle et CPU).
