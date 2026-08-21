@@ -131,8 +131,22 @@ class SnakeEnv:
             y -= 1
         self.head = Point(x, y)
 
+    def _point_ahead(self, direction, steps):
+        x, y = self.head.x, self.head.y
+        if direction == Direction.RIGHT:
+            x += steps
+        elif direction == Direction.LEFT:
+            x -= steps
+        elif direction == Direction.DOWN:
+            y += steps
+        elif direction == Direction.UP:
+            y -= steps
+        return Point(x, y)
+
     def get_state(self):
-        """État discret sous forme de 11 booléens (dangers, direction, position nourriture)."""
+        """État discret : 14 booléens (dangers à 1 case, dangers à 2 cases, direction,
+        position nourriture). Les dangers à 2 cases donnent à l'agent un avertissement
+        avant d'être coincé dans une impasse, ce que le danger à 1 case seul ne permet pas."""
         head = self.head
         point_l = Point(head.x - 1, head.y)
         point_r = Point(head.x + 1, head.y)
@@ -144,22 +158,29 @@ class SnakeEnv:
         dir_u = self.direction == Direction.UP
         dir_d = self.direction == Direction.DOWN
 
+        idx = _CLOCKWISE.index(self.direction)
+        straight_dir = _CLOCKWISE[idx]
+        right_dir = _CLOCKWISE[(idx + 1) % 4]
+        left_dir = _CLOCKWISE[(idx - 1) % 4]
+
         state = [
-            # danger tout droit
+            # danger tout droit / à droite / à gauche, à 1 case
             (dir_r and self._is_collision(point_r))
             or (dir_l and self._is_collision(point_l))
             or (dir_u and self._is_collision(point_u))
             or (dir_d and self._is_collision(point_d)),
-            # danger à droite
             (dir_u and self._is_collision(point_r))
             or (dir_d and self._is_collision(point_l))
             or (dir_l and self._is_collision(point_u))
             or (dir_r and self._is_collision(point_d)),
-            # danger à gauche
             (dir_d and self._is_collision(point_r))
             or (dir_u and self._is_collision(point_l))
             or (dir_r and self._is_collision(point_u))
             or (dir_l and self._is_collision(point_d)),
+            # danger tout droit / à droite / à gauche, à 2 cases (avertissement anticipé)
+            self._is_collision(self._point_ahead(straight_dir, 2)),
+            self._is_collision(self._point_ahead(right_dir, 2)),
+            self._is_collision(self._point_ahead(left_dir, 2)),
             # direction actuelle
             dir_l,
             dir_r,

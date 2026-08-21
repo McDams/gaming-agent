@@ -13,7 +13,7 @@ N_ACTIONS = 3
 
 
 class QLearningAgent:
-    def __init__(self, lr=0.25, gamma=0.98, epsilon=1.0, epsilon_min=0.02, epsilon_decay=0.9995):
+    def __init__(self, lr=0.25, gamma=0.98, epsilon=1.0, epsilon_min=0.02, epsilon_decay=0.999):
         self.lr = lr
         self.gamma = gamma
         self.epsilon = epsilon
@@ -30,17 +30,19 @@ class QLearningAgent:
             self.q_table[key] = np.zeros(N_ACTIONS, dtype=float)
 
     def _food_vector(self, state):
+        # Les 4 derniers booléens sont toujours food_left/right/up/down, quel que soit le
+        # nombre de bits de danger en tête du vecteur d'état.
         if len(state) < 11:
             return 0, 0
         dx = 0
         dy = 0
-        if state[7]:
+        if state[-4]:
             dx -= 1
-        if state[8]:
+        if state[-3]:
             dx += 1
-        if state[9]:
+        if state[-2]:
             dy -= 1
-        if state[10]:
+        if state[-1]:
             dy += 1
         return dx, dy
 
@@ -50,8 +52,9 @@ class QLearningAgent:
 
     def _food_bias(self, state):
         # Favorise les actions qui rapprochent la tête de la nourriture.
+        # Les 4 booléens juste avant la position de la nourriture sont dir_l/r/u/d.
         dx, dy = self._food_vector(state)
-        direction = np.argmax(np.asarray(state[3:7], dtype=float))
+        direction = np.argmax(np.asarray(state[-8:-4], dtype=float))
         action_scores = np.zeros(N_ACTIONS, dtype=float)
 
         for action in range(N_ACTIONS):
@@ -73,6 +76,15 @@ class QLearningAgent:
 
         return action_scores
 
+    def _danger2(self, state):
+        # Avertissement de danger à 2 cases (0 si l'état ne le fournit pas -> pas de biais).
+        if len(state) < 6:
+            return np.zeros(N_ACTIONS, dtype=float)
+        return np.asarray(state[3:6], dtype=float)
+
+    def _action_bias(self, state):
+        return 1.5 * self._food_bias(state) - 1.0 * self._danger2(state)
+
     def choose_action(self, state, greedy=False):
         key = self._state_key(state)
         self._ensure_state(key)
@@ -80,12 +92,13 @@ class QLearningAgent:
         if not greedy and random.random() < self.epsilon:
             base_action = random.randint(0, N_ACTIONS - 1)
         else:
-            base_action = int(np.argmax(self.q_table[key] + 1.5 * self._food_bias(state)))
+            base_action = int(np.argmax(self.q_table[key] + self._action_bias(state)))
 
         danger = np.asarray(state[:3], dtype=float)
         safe_actions = [a for a in range(N_ACTIONS) if danger[a] == 0]
         if safe_actions:
-            best_safe = max(safe_actions, key=lambda a: self.q_table[key][a] + 1.5 * self._food_bias(state)[a])
+            bias = self._action_bias(state)
+            best_safe = max(safe_actions, key=lambda a: self.q_table[key][a] + bias[a])
             return best_safe
         return max(range(N_ACTIONS), key=lambda a: self.q_table[key][a]) if not greedy else base_action
 
