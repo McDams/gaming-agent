@@ -10,6 +10,11 @@ tourne et donne un score en quelques minutes de mise en place, sans dépendance 
 (pas de GPU nécessaire), et permet un espace d'états discrétisable simplement pour du
 Q-learning tabulaire.
 
+Rendu graphique : bandeau HUD (score, meilleur score, numéro de partie, libellé de l'agent
+affiché), grille en damier, tête du serpent distincte du corps (avec des yeux qui indiquent
+la direction), nourriture ronde, écran de fin de partie. Vitesse d'affichage réglable
+(`--speed`, cf. plus bas) pour rester lisible en vidéo.
+
 ## Ce que l'agent observe, fait, et ce qui le récompense
 
 **Observation (état, 11 booléens)** :
@@ -70,17 +75,32 @@ Historique complet des essais (y compris ratés) : [NOTEBOOK.md](NOTEBOOK.md).
 
 ```bash
 pip install -r requirements.txt
+```
 
+### Voir jouer le meilleur agent entraîné (dernier modèle retenu)
+
+```bash
+python evaluate.py --model deliverable/best_agent.pkl --episodes 10 --render
+```
+
+`deliverable/best_agent.pkl` est le meilleur agent trouvé à ce jour (seed 36, sweep sur 100
+seeds × 3000 épisodes — voir "Résultats" ci-dessus et [NOTEBOOK.md](NOTEBOOK.md)). Il se
+recharge directement, sans réentraînement. `--episodes` contrôle le nombre de parties
+jouées, `--speed N` la vitesse d'affichage en images/seconde (défaut 12, pensé pour rester
+regardable ; monter à 30-40 pour aller plus vite, descendre à 6-8 pour un rendu plus posé
+en vidéo).
+
+### Autres commandes
+
+```bash
 # Agent aléatoire jouable (référence)
 python game/play_random.py --episodes 20 --render
 
-# Entraînement
+# Entraînement (sauvegarde périodiquement le meilleur agent, jugé en greedy)
 python train.py --episodes 1000 --run-name essai1
+python evaluate.py --model runs/essai1/best_agent.pkl --episodes 20 --render
 
-# Recharger le meilleur agent retenu et le faire rejouer (script indépendant)
-python evaluate.py --model deliverable/best_agent.pkl --episodes 20 --render
-
-# Relancer un sweep multi-seeds (recherche du meilleur agent)
+# Relancer un sweep multi-seeds pour rechercher un meilleur agent
 python sweep.py --episodes 3000 --seed-start 1 --seed-end 100 --workers 4
 ```
 

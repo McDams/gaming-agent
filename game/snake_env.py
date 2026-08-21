@@ -5,9 +5,24 @@ from enum import Enum
 
 import numpy as np
 
-BLOCK_SIZE = 20
-GRID_W, GRID_H = 20, 15  # cases -> fenêtre 400x300
-SPEED = 40  # FPS en mode rendu
+BLOCK_SIZE = 28
+GRID_W, GRID_H = 20, 15  # cases -> fenêtre 560x420 (+ bandeau HUD)
+HUD_HEIGHT = 56
+DEFAULT_SPEED = 12  # FPS en mode rendu, pensé pour être regardable (pas juste fonctionnel)
+
+# Palette
+COLOR_BG_A = (24, 28, 36)
+COLOR_BG_B = (30, 34, 44)
+COLOR_HUD_BG = (18, 20, 26)
+COLOR_HUD_BORDER = (70, 200, 120)
+COLOR_SNAKE_HEAD = (110, 231, 160)
+COLOR_SNAKE_BODY_A = (60, 179, 113)
+COLOR_SNAKE_BODY_B = (46, 150, 93)
+COLOR_FOOD = (235, 87, 87)
+COLOR_FOOD_HIGHLIGHT = (255, 150, 140)
+COLOR_TEXT = (235, 235, 235)
+COLOR_TEXT_DIM = (150, 155, 165)
+COLOR_GAMEOVER_OVERLAY = (10, 10, 14)
 
 Point = namedtuple("Point", ["x", "y"])
 
@@ -26,12 +41,18 @@ _CLOCKWISE = [Direction.UP, Direction.RIGHT, Direction.DOWN, Direction.LEFT]
 class SnakeEnv:
     """Action = 0 (tout droit), 1 (tourner à droite), 2 (tourner à gauche)."""
 
-    def __init__(self, render=False, max_steps_without_food=100):
+    def __init__(self, render=False, max_steps_without_food=100, speed=DEFAULT_SPEED, label=None):
         self.render_enabled = render
         self.max_steps_without_food = max_steps_without_food
+        self.speed = speed
+        self.label = label
+        self.episode = None
+        self.total_episodes = None
+        self.high_score = 0
         self._screen = None
         self._clock = None
         self._font = None
+        self._font_small = None
         if self.render_enabled:
             self._init_render()
         self.reset()
@@ -41,10 +62,21 @@ class SnakeEnv:
 
         pygame.init()
         self._pygame = pygame
-        self._screen = pygame.display.set_mode((GRID_W * BLOCK_SIZE, GRID_H * BLOCK_SIZE))
+        window_size = (GRID_W * BLOCK_SIZE, GRID_H * BLOCK_SIZE + HUD_HEIGHT)
+        self._screen = pygame.display.set_mode(window_size)
         pygame.display.set_caption("Snake - Gaming Agent")
         self._clock = pygame.time.Clock()
-        self._font = pygame.font.SysFont("arial", 20)
+        self._font = pygame.font.SysFont("segoeui", 22, bold=True)
+        self._font_small = pygame.font.SysFont("segoeui", 16)
+
+    def set_episode_info(self, episode=None, total_episodes=None, label=None):
+        """Met à jour le bandeau HUD (numéro d'épisode, libellé de l'agent affiché)."""
+        if episode is not None:
+            self.episode = episode
+        if total_episodes is not None:
+            self.total_episodes = total_episodes
+        if label is not None:
+            self.label = label
 
     def reset(self):
         self.direction = Direction.RIGHT
@@ -83,8 +115,10 @@ class SnakeEnv:
         if self._is_collision() or self.steps_since_food > self.max_steps_without_food:
             done = True
             reward = -10
+            self.high_score = max(self.high_score, self.score)
             if self.render_enabled:
-                self._draw()
+                self._draw(game_over=True)
+                self._pygame.time.delay(500)
             return self.get_state(), reward, done, self.score
 
         if self.head == self.food:
@@ -98,7 +132,7 @@ class SnakeEnv:
 
         if self.render_enabled:
             self._draw()
-            self._clock.tick(SPEED)
+            self._clock.tick(self.speed)
 
         return self.get_state(), reward, done, self.score
 
@@ -178,20 +212,83 @@ class SnakeEnv:
         ]
         return np.array(state, dtype=int)
 
-    def _draw(self):
+    def _draw_grid(self, pygame):
+        for gy in range(GRID_H):
+            for gx in range(GRID_W):
+                color = COLOR_BG_A if (gx + gy) % 2 == 0 else COLOR_BG_B
+                pygame.draw.rect(
+                    self._screen,
+                    color,
+                    (gx * BLOCK_SIZE, HUD_HEIGHT + gy * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE),
+                )
+
+    def _draw_snake(self, pygame):
+        n = len(self.snake)
+        for i, p in enumerate(self.snake):
+            is_head = i == 0
+            color = COLOR_SNAKE_HEAD if is_head else (COLOR_SNAKE_BODY_A if i % 2 else COLOR_SNAKE_BODY_B)
+            rect = (p.x * BLOCK_SIZE + 1, HUD_HEIGHT + p.y * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2)
+            pygame.draw.rect(self._screen, color, rect, border_radius=8 if is_head else 5)
+
+            if is_head:
+                self._draw_eyes(pygame, p)
+
+    def _draw_eyes(self, pygame, head):
+        cx = head.x * BLOCK_SIZE + BLOCK_SIZE // 2
+        cy = HUD_HEIGHT + head.y * BLOCK_SIZE + BLOCK_SIZE // 2
+        offset = BLOCK_SIZE // 4
+        if self.direction in (Direction.LEFT, Direction.RIGHT):
+            dx = offset if self.direction == Direction.RIGHT else -offset
+            eyes = [(cx + dx, cy - offset), (cx + dx, cy + offset)]
+        else:
+            dy = offset if self.direction == Direction.DOWN else -offset
+            eyes = [(cx - offset, cy + dy), (cx + offset, cy + dy)]
+        for ex, ey in eyes:
+            pygame.draw.circle(self._screen, (20, 30, 25), (ex, ey), 3)
+
+    def _draw_food(self, pygame):
+        cx = self.food.x * BLOCK_SIZE + BLOCK_SIZE // 2
+        cy = HUD_HEIGHT + self.food.y * BLOCK_SIZE + BLOCK_SIZE // 2
+        radius = BLOCK_SIZE // 2 - 2
+        pygame.draw.circle(self._screen, COLOR_FOOD, (cx, cy), radius)
+        pygame.draw.circle(self._screen, COLOR_FOOD_HIGHLIGHT, (cx - radius // 3, cy - radius // 3), max(2, radius // 3))
+
+    def _draw_hud(self, pygame):
+        pygame.draw.rect(self._screen, COLOR_HUD_BG, (0, 0, GRID_W * BLOCK_SIZE, HUD_HEIGHT))
+        pygame.draw.line(self._screen, COLOR_HUD_BORDER, (0, HUD_HEIGHT - 1), (GRID_W * BLOCK_SIZE, HUD_HEIGHT - 1), 2)
+
+        score_text = self._font.render(f"Score {self.score}", True, COLOR_TEXT)
+        self._screen.blit(score_text, (14, 6))
+
+        best_text = self._font_small.render(f"Meilleur: {self.high_score}", True, COLOR_TEXT_DIM)
+        self._screen.blit(best_text, (14, 32))
+
+        if self.label:
+            label_surf = self._font_small.render(self.label, True, COLOR_TEXT_DIM)
+            self._screen.blit(label_surf, (GRID_W * BLOCK_SIZE - label_surf.get_width() - 14, 8))
+
+        if self.episode is not None:
+            ep_str = f"Partie {self.episode}/{self.total_episodes}" if self.total_episodes else f"Partie {self.episode}"
+            ep_surf = self._font_small.render(ep_str, True, COLOR_TEXT_DIM)
+            self._screen.blit(ep_surf, (GRID_W * BLOCK_SIZE - ep_surf.get_width() - 14, 32))
+
+    def _draw_game_over(self, pygame):
+        overlay = pygame.Surface((GRID_W * BLOCK_SIZE, GRID_H * BLOCK_SIZE), pygame.SRCALPHA)
+        overlay.fill((*COLOR_GAMEOVER_OVERLAY, 160))
+        self._screen.blit(overlay, (0, HUD_HEIGHT))
+
+        text = self._font.render(f"Partie terminée — score {self.score}", True, COLOR_TEXT)
+        rect = text.get_rect(center=(GRID_W * BLOCK_SIZE // 2, HUD_HEIGHT + GRID_H * BLOCK_SIZE // 2))
+        self._screen.blit(text, rect)
+
+    def _draw(self, game_over=False):
         pygame = self._pygame
-        self._screen.fill((0, 0, 0))
-        for p in self.snake:
-            pygame.draw.rect(
-                self._screen, (0, 200, 0), (p.x * BLOCK_SIZE, p.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
-            )
-        pygame.draw.rect(
-            self._screen,
-            (200, 0, 0),
-            (self.food.x * BLOCK_SIZE, self.food.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE),
-        )
-        text = self._font.render(f"Score: {self.score}", True, (255, 255, 255))
-        self._screen.blit(text, (5, 5))
+        self._draw_grid(pygame)
+        self._draw_food(pygame)
+        self._draw_snake(pygame)
+        self._draw_hud(pygame)
+        if game_over:
+            self._draw_game_over(pygame)
         pygame.display.flip()
 
     def close(self):

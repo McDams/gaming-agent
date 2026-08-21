@@ -154,3 +154,94 @@ class QLearningAgent:
 
 class ImprovedQLearningAgent(QLearningAgent):
     pass
+
+
+class DoubleQLearningAgent(QLearningAgent):
+    """Double Q-learning : deux tables Q, mises à jour en alternance, chacune utilisant
+    l'autre pour évaluer l'action choisie. Corrige le biais de surestimation du Q-learning
+    simple (argmax et évaluation faits par la même table). Même heuristique nourriture et
+    même filtre d'actions sûres que QLearningAgent, seule la mise à jour change."""
+
+    def __init__(self, lr=0.25, gamma=0.98, epsilon=1.0, epsilon_min=0.02, epsilon_decay=0.99):
+        super().__init__(lr=lr, gamma=gamma, epsilon=epsilon, epsilon_min=epsilon_min, epsilon_decay=epsilon_decay)
+        self.q_table_b = {}
+
+    def _ensure_state(self, key):
+        super()._ensure_state(key)
+        if key not in self.q_table_b:
+            self.q_table_b[key] = np.zeros(N_ACTIONS, dtype=float)
+
+    def _combined(self, key):
+        return self.q_table[key] + self.q_table_b[key]
+
+    def choose_action(self, state, greedy=False):
+        key = self._state_key(state)
+        self._ensure_state(key)
+
+        danger = np.asarray(state[:3], dtype=float)
+        safe_actions = [a for a in range(N_ACTIONS) if danger[a] == 0]
+
+        if not greedy and random.random() < self.epsilon:
+            if safe_actions:
+                return random.choice(safe_actions)
+            return random.randrange(N_ACTIONS)
+
+        combined = self._combined(key)
+        bias = self._action_bias(state)
+        if safe_actions:
+            return max(safe_actions, key=lambda a: combined[a] + bias[a])
+        return int(np.argmax(combined))
+
+    def update(self, state, action, reward, next_state, done):
+        key = self._state_key(state)
+        next_key = self._state_key(next_state)
+        self._ensure_state(key)
+        self._ensure_state(next_key)
+
+        old_dist = self._distance_to_food(state)
+        new_dist = self._distance_to_food(next_state)
+        if old_dist > 0:
+            reward += max(0.0, old_dist - new_dist) * 2.5
+        if done:
+            reward -= 15.0 if reward < 0 else 0.0
+
+        if random.random() < 0.5:
+            a_star = int(np.argmax(self.q_table[next_key]))
+            target = reward if done else reward + self.gamma * self.q_table_b[next_key][a_star]
+            self.q_table[key][action] += self.lr * (target - self.q_table[key][action])
+        else:
+            b_star = int(np.argmax(self.q_table_b[next_key]))
+            target = reward if done else reward + self.gamma * self.q_table[next_key][b_star]
+            self.q_table_b[key][action] += self.lr * (target - self.q_table_b[key][action])
+
+    def save(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(
+                {
+                    "q_table": self.q_table,
+                    "q_table_b": self.q_table_b,
+                    "lr": self.lr,
+                    "gamma": self.gamma,
+                    "epsilon": self.epsilon,
+                    "epsilon_min": self.epsilon_min,
+                    "epsilon_decay": self.epsilon_decay,
+                },
+                f,
+            )
+
+    @classmethod
+    def load(cls, path):
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        agent = cls(
+            lr=data["lr"],
+            gamma=data["gamma"],
+            epsilon=data["epsilon"],
+            epsilon_min=data["epsilon_min"],
+            epsilon_decay=data["epsilon_decay"],
+        )
+        agent.q_table = data["q_table"]
+        agent.q_table_b = data["q_table_b"]
+        return agent
