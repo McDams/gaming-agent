@@ -17,7 +17,21 @@ from agent.q_learning import ImprovedQLearningAgent
 from game.snake_env import SnakeEnv
 
 
-def train(episodes=1000, run_name="run", seed=None):
+def _greedy_eval(agent, env, episodes=5):
+    """Score moyen en politique greedy (sans exploration), pour juger la Q-table
+    indépendamment du bruit de l'exploration epsilon-greedy en cours d'entraînement."""
+    eval_scores = []
+    for _ in range(episodes):
+        state = env.reset()
+        done = False
+        while not done:
+            action = agent.choose_action(state, greedy=True)
+            state, _, done, score = env.step(action)
+        eval_scores.append(score)
+    return float(np.mean(eval_scores))
+
+
+def train(episodes=1000, run_name="run", seed=None, eval_every=100, eval_episodes=5):
     if seed is not None:
         import random
 
@@ -28,7 +42,7 @@ def train(episodes=1000, run_name="run", seed=None):
     agent = ImprovedQLearningAgent()
 
     scores = []
-    best_score = -1
+    best_eval_avg = -1.0
     run_dir = Path("runs") / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,9 +58,15 @@ def train(episodes=1000, run_name="run", seed=None):
         agent.decay_epsilon()
         scores.append(score)
 
-        if score > best_score:
-            best_score = score
-            agent.save(run_dir / "best_agent.pkl")
+        # Le score brut d'un épisode d'entraînement est bruité par l'exploration
+        # epsilon-greedy : un coup de chance peut battre le record sans que la Q-table
+        # soit vraiment meilleure. On juge donc et on sauvegarde sur une évaluation
+        # greedy périodique, plus fiable (mêmes conditions que evaluate.py).
+        if (ep + 1) % eval_every == 0:
+            eval_avg = _greedy_eval(agent, env, episodes=eval_episodes)
+            if eval_avg > best_eval_avg:
+                best_eval_avg = eval_avg
+                agent.save(run_dir / "best_agent.pkl")
 
         if (ep + 1) % 50 == 0:
             avg = np.mean(scores[-50:])
@@ -59,8 +79,8 @@ def train(episodes=1000, run_name="run", seed=None):
 
     _plot_curve(scores, run_dir / "learning_curve.png", run_name)
 
-    print(f"\nMeilleur score: {best_score}")
-    print(f"Score moyen (100 derniers épisodes): {np.mean(scores[-100:]):.2f}")
+    print(f"\nMeilleure moyenne greedy (éval périodique sur {eval_episodes} parties): {best_eval_avg:.2f}")
+    print(f"Score moyen (100 derniers épisodes d'entraînement): {np.mean(scores[-100:]):.2f}")
     print(f"Agents sauvegardés dans: {run_dir}")
 
     return scores

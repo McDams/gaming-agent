@@ -18,6 +18,13 @@ class ImprovedQLearningTests(unittest.TestCase):
         self.assertGreater(bias[0], bias[1])
         self.assertGreater(bias[0], bias[2])
 
+    def test_exploration_samples_only_safe_actions(self):
+        agent = QLearningAgent(epsilon=1.0)
+        state = [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0]
+        actions = {agent.choose_action(state) for _ in range(30)}
+        self.assertTrue(actions)
+        self.assertTrue(actions.issubset({1, 2}))
+
 
 if __name__ == "__main__":
     unittest.main()

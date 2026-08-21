@@ -76,4 +76,52 @@ Inclure les tentatives ratées.
 - Coût : 100 entraînements × 3000 épisodes = 300 000 épisodes, ~169 minutes en parallèle
   (3 workers, machine 4 cœurs physiques).
 
-<!-- Ajouter une entrée par tentative, même ratée -->
+## Essai 5 — État enrichi à 14 booléens (danger anticipé à 2 cases) — RATÉ
+- Date : 2026-08-21
+- Changement : ajout de 3 booléens "danger à 2 cases" (tout droit/droite/gauche) en plus
+  des 3 "danger à 1 case" existants, plus un biais d'action correspondant, en même temps
+  qu'un passage d'`epsilon_decay` de 0.9995 à 0.999.
+- Résultat (10 seeds x 3000 épisodes) : eval_avg moyen tombe de ~25.8 à ~11.0 — net recul.
+- Diagnostic : deux changements testés en même temps (contraire à la règle "une amélioration
+  à la fois"), donc impossible de savoir lequel est responsable. Un test isolé ultérieur
+  (état 14 bits seul, epsilon_decay inchangé) montre un résultat toujours mitigé/pas
+  meilleur que l'état à 11 bits, selon la config d'epsilon testée.
+- Conclusion : **annulé**, retour à l'état à 11 booléens d'origine. Le gain espéré
+  (anticiper les impasses) ne s'est pas confirmé, sans doute parce que la table Q doit déjà
+  apprendre ~8x plus de combinaisons d'états pour le même budget d'épisodes.
+
+## Essai 6 — Bug d'exploration epsilon-greedy corrigé + recalibrage — RÉUSSI
+- Date : 2026-08-21
+- Découverte (en même temps qu'une correction apportée en parallèle sur le code) : dans
+  l'agent original, la branche d'exploration aléatoire d'epsilon-greedy calculait bien une
+  action aléatoire, mais elle était systématiquement écrasée par le filtre de sécurité qui
+  repassait en glouton (Q + biais nourriture) dès qu'une action sûre existait — c'est-à-dire
+  presque tout le temps. Résultat : `epsilon` n'avait quasiment aucun effet, l'agent jouait
+  déjà en mode quasi-glouton dès l'épisode 1, guidé par l'heuristique nourriture. C'est ce
+  qui explique en partie les bons scores obtenus dans les essais précédents malgré un
+  epsilon nominal élevé.
+- Correction : l'exploration aléatoire choisit maintenant vraiment une action au hasard
+  (parmi les actions sûres si possible), comme un epsilon-greedy est censé fonctionner.
+  Comportement plus correct, mais qui casse les scores tel quel : avec `epsilon_decay`
+  toujours à 0.9995/0.999 (jamais calibré pour une vraie exploration), l'agent erre au
+  hasard une bonne partie des 3000 épisodes au lieu de suivre l'heuristique.
+- Recalibrage : `epsilon_decay` passé à 0.99 (epsilon atteint son minimum ~0.02 vers
+  l'épisode 390, donc l'agent a largement le temps de converger sur 3000 épisodes tout en
+  ayant vraiment exploré au début).
+- Bonus découvert en testant : la sauvegarde de `best_agent.pkl` se faisait auparavant sur
+  le score brut d'un épisode d'entraînement, bruité par l'exploration — un cas observé :
+  train_best=69 en entraînement mais eval_avg=1.1 une fois rechargé en greedy (coup de
+  chance non représentatif). Corrigé dans `train.py` : la sauvegarde se fait maintenant sur
+  une évaluation greedy périodique (5 parties toutes les 100 épisodes), cohérente avec la
+  façon dont `evaluate.py` juge l'agent.
+- Résultat (10 seeds x 3000 épisodes, mêmes seeds que l'essai 4) :
+
+  | | eval_avg moyen | eval_max (meilleur score) |
+  |---|---|---|
+  | Avant (essai 4, bug d'exploration) | 25.8 | 50 |
+  | Après (essai 6) | 29.5 | 68 |
+
+  Plus de scores catastrophiques après rechargement (l'écart train_best/eval_avg observé
+  avant la correction du bonus de sauvegarde a disparu).
+- Sweep complet 100 seeds x 3000 épisodes relancé avec cette config pour trouver l'agent
+  définitif (voir résultats mis à jour dans le README et `deliverable/`).
