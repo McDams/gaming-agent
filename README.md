@@ -47,15 +47,20 @@ Hyperparamètres par défaut (`agent/q_learning.py`) :
 | Agent | Score moyen | Max | Min | Nb parties |
 |---|---|---|---|---|
 | Aléatoire (référence) | 0.20 | 1 | 0 | 20 |
-| Q-learning entraîné (2000 épisodes) | 19.00 | 38 | 9 | 20 |
+| Q-learning entraîné (2000 épisodes, 1 run) | 19.00 | 38 | 9 | 20 |
+| **Meilleur agent retenu** (sweep 100 seeds × 3000 épisodes, seed 91) | **35.55** | 53 | 20 | 20 |
 
-L'agent entraîné fait ~95x mieux que le hasard sur le même nombre de parties.
-Entraînement relancé une seconde fois (seed différente) : moyenne mobile finale de 19.18
-contre 19.56 pour le premier run, meilleur score 46 contre 50 — comportement stable et
-reproductible d'un run à l'autre.
+Le meilleur agent retenu fait ~178x mieux que le hasard sur le même nombre de parties.
+Reproductibilité vérifiée à deux niveaux : un premier run relancé avec une seed différente
+(essai 3) donne des courbes très proches ; un sweep sur 100 seeds indépendantes (essai 4)
+montre une distribution stable (score max en entraînement : moyenne 49.9, médiane 51,
+écart-type 8.1) — voir [NOTEBOOK.md](NOTEBOOK.md) pour le détail des deux essais, y compris
+l'essai 4 qui visait à dépasser un score de 66 et n'y est pas parvenu (plafond observé sur
+les 100 seeds, indépendamment de la seed).
 
-Courbe de progression : voir `runs/<nom_run>/learning_curve.png` (générée localement,
-non versionnée — voir [NOTEBOOK.md](NOTEBOOK.md) pour l'historique complet des essais).
+Courbe de progression du meilleur agent : [deliverable/learning_curve.png](deliverable/learning_curve.png).
+Résumé complet des 100 seeds testés : [deliverable/sweep_summary.csv](deliverable/sweep_summary.csv).
+Historique complet des essais (y compris ratés) : [NOTEBOOK.md](NOTEBOOK.md).
 
 ## Comment lancer
 
@@ -68,8 +73,11 @@ python game/play_random.py --episodes 20 --render
 # Entraînement
 python train.py --episodes 1000 --run-name essai1
 
-# Recharger le meilleur agent et le faire rejouer (script indépendant)
-python evaluate.py --model runs/essai1/best_agent.pkl --episodes 20 --render
+# Recharger le meilleur agent retenu et le faire rejouer (script indépendant)
+python evaluate.py --model deliverable/best_agent.pkl --episodes 20 --render
+
+# Relancer un sweep multi-seeds (recherche du meilleur agent)
+python sweep.py --episodes 3000 --seed-start 1 --seed-end 100 --workers 4
 ```
 
 ## Carnet d'essais

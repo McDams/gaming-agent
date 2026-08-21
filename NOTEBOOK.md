@@ -42,4 +42,38 @@ Inclure les tentatives ratées.
   raisonnablement stable d'un run à l'autre avec cette config — pas de signe
   d'instabilité ou de surapprentissage erratique.
 
+## Essai 4 — Sweep 100 seeds x 3000 épisodes (recherche du meilleur agent)
+- Date : 2026-08-21
+- Objectif : entraîner un agent par seed (1 à 100), même config par défaut
+  (lr=0.25, gamma=0.98, epsilon_decay=0.9995), 3000 épisodes chacun, pour voir si
+  la seule variation de seed permet de dépasser le meilleur score connu (66, seed 13,
+  trouvé lors d'un sweep préliminaire identique) et si possible atteindre 100+.
+- Script : `sweep.py`, parallélisé (`ProcessPoolExecutor`). Pour chaque seed : entraînement
+  complet + réévaluation greedy sur 20 parties (comme `evaluate.py`) pour avoir un score
+  comparable d'un seed à l'autre (le score "best" vu pendant l'entraînement est bruité par
+  l'exploration epsilon-greedy, epsilon ne descend qu'à ~0.22 après 3000 épisodes avec
+  epsilon_decay=0.9995).
+- Résultat sur les 100 seeds :
+  - `train_best` (score max vu en entraînement) : moyenne 49.9, médiane 51, **max 66**
+    (seed 13 — résultat identique au sweep préliminaire, logique car même code/seed).
+    Seulement 1/100 seeds atteint 66, 7/100 atteignent ≥60, **aucun n'atteint 100**.
+  - `eval_avg` (score moyen sur 20 parties, politique greedy, métrique la plus fiable) :
+    moyenne 21.4, médiane 23.1, **meilleur agent : seed 91, eval_avg=35.55, eval_max=53**
+    (train_best=61 pour ce seed — moins que le seed 13 en entraînement brut, mais plus
+    régulier une fois greedy).
+- Conclusion / échec instructif : **l'objectif de dépasser 66 n'est pas atteint** — le
+  score plafonne exactement à 66 quelle que soit la seed testée parmi 1-100, et viser 100+
+  n'est pas réaliste avec cette config (état à 11 booléens, Q-learning tabulaire, mêmes
+  hyperparamètres). La seed seule ne suffit pas à améliorer significativement l'agent :
+  ça montre que le plafond vient de la représentation d'état / des hyperparamètres, pas de
+  la chance du tirage aléatoire. Pour aller plus loin il faudrait changer autre chose
+  (state plus riche, plus d'épisodes avec une décroissance d'epsilon plus rapide, ou
+  reward shaping) — cf. "Ce qu'on ferait avec plus de temps" dans le README.
+- Agent retenu comme "meilleur agent" du projet : seed 91 (meilleur eval_avg, donc le plus
+  fiable en greedy), copié dans `deliverable/best_agent.pkl` avec sa courbe
+  (`deliverable/learning_curve.png`) et le résumé complet des 100 seeds
+  (`deliverable/sweep_summary.csv`).
+- Coût : 100 entraînements × 3000 épisodes = 300 000 épisodes, ~169 minutes en parallèle
+  (3 workers, machine 4 cœurs physiques).
+
 <!-- Ajouter une entrée par tentative, même ratée -->

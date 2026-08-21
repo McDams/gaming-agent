@@ -9,6 +9,10 @@ runs/
 *.png
 *.mp4
 
+# exception : le meilleur agent + sa courbe, choisis à la main, sont petits (<70 Ko)
+# et versionnés pour que le correcteur puisse les recharger sans relancer un entraînement
+!deliverable/*.png
+
 # éditeurs
 .vscode/
 .idea/
