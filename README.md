@@ -42,6 +42,11 @@ ce qui rend une table Q (dictionnaire état→valeurs d'actions) suffisante, san
 d'un réseau de neurones. C'est aussi la méthode la plus simple à faire tourner et à
 comprendre entièrement en 2 jours, sans GPU.
 
+Deux alternatives ont été testées pour essayer de l'améliorer : Double Q-learning (plus
+régulier mais pas meilleur sur ce budget d'épisodes) et un DQN (réseau de neurones, plafonne
+nettement en dessous même avec 3x plus d'épisodes). Aucune des deux n'a été retenue — détail
+et raisons dans [NOTEBOOK.md](NOTEBOOK.md), essais 7 et 8.
+
 Hyperparamètres par défaut (`agent/q_learning.py`) :
 - learning rate = 0.25
 - gamma (discount) = 0.98
@@ -66,6 +71,20 @@ mêmes seeds, le score moyen monte à 56.3 (écart-type 4.8, donc plus régulier
 score passe de 66 à 70 — voir [NOTEBOOK.md](NOTEBOOK.md) pour le détail complet, y compris
 les tentatives ratées (état enrichi qui n'a pas aidé, sauvegarde sur un score d'entraînement
 bruité qui donnait parfois un agent malchanceux une fois rechargé).
+
+Après ça, deux pistes pour aller plus loin que le Q-learning simple ont été testées, sur le
+même budget de 3000 épisodes (sauf mention contraire) et la même méthode d'évaluation :
+
+| Variante | eval_avg moyen | eval_avg max | Retenue ? |
+|---|---|---|---|
+| **Q-learning simple (retenu)** | **29.3** | **42.15** | ✅ |
+| Double Q-learning | 27.7 (écart-type ~3x plus faible) | 30.65 | ❌ (essai 7) |
+| DQN, réseau de neurones (10 000 épisodes) | 27.0 | 45 | ❌ (essai 8) |
+
+Aucune des deux ne bat le Q-learning simple sur ce budget d'épisodes — Double Q-learning est
+plus régulier mais plus lent à converger (deux tables à remplir au lieu d'une), le DQN
+plafonne et oscille sans jamais vraiment converger. Détail complet, y compris le
+diagnostic de chaque échec, dans [NOTEBOOK.md](NOTEBOOK.md) (essais 7 et 8).
 
 Courbe de progression du meilleur agent : [deliverable/learning_curve.png](deliverable/learning_curve.png).
 Résumé complet des 100 seeds testés : [deliverable/sweep_summary.csv](deliverable/sweep_summary.csv).
@@ -113,9 +132,13 @@ Lien : _à compléter_
 ## Ce qu'on ferait avec plus de temps
 - On a testé un état enrichi à 14 booléens (danger anticipé à 2 cases) : pas concluant
   (essai 5), probablement parce que l'espace d'états devient ~8x plus grand pour le même
-  budget d'épisodes. Avec plus de temps, il faudrait le retester isolément avec plus
-  d'épisodes, ou passer directement à un DQN (réseau de neurones) qui généralise mieux
-  qu'une table Q sur un état plus riche.
+  budget d'épisodes. À retester isolément avec plus d'épisodes.
+- On a aussi testé Double Q-learning (plus régulier, pas meilleur — essai 7) et un DQN
+  (réseau de neurones, plafonne en dessous du tabulaire même à 10 000 épisodes — essai 8).
+  Pour le DQN, les pistes non essayées faute de temps : normaliser/clipper la récompense,
+  replay prioritisé, ou lui donner un état plus riche (justement ce qui n'a pas marché en
+  tabulaire à l'essai 5) puisqu'un réseau généralise mieux qu'une table sur un état large —
+  mais ça n'a pas pu être testé avant la deadline.
 - Complexifier la fonction de récompense (pénaliser les trajectoires qui s'éloignent
   durablement de la nourriture, encourager la survie) une fois la version simple
   validée, comme le suggère la consigne du projet.
