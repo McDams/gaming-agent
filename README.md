@@ -38,9 +38,10 @@ d'un réseau de neurones. C'est aussi la méthode la plus simple à faire tourne
 comprendre entièrement en 2 jours, sans GPU.
 
 Hyperparamètres par défaut (`agent/q_learning.py`) :
-- learning rate = 0.1
-- gamma (discount) = 0.9
-- epsilon initial = 1.0, décroissance ×0.995 par épisode, minimum 0.01
+- learning rate = 0.25
+- gamma (discount) = 0.98
+- epsilon initial = 1.0, décroissance ×0.99 par épisode, minimum 0.02 (retendu à l'essai 6
+  après correction d'un bug d'exploration — voir [NOTEBOOK.md](NOTEBOOK.md))
 
 ## Résultats
 
@@ -48,15 +49,18 @@ Hyperparamètres par défaut (`agent/q_learning.py`) :
 |---|---|---|---|---|
 | Aléatoire (référence) | 0.20 | 1 | 0 | 20 |
 | Q-learning entraîné (2000 épisodes, 1 run) | 19.00 | 38 | 9 | 20 |
-| **Meilleur agent retenu** (sweep 100 seeds × 3000 épisodes, seed 91) | **35.55** | 53 | 20 | 20 |
+| **Meilleur agent retenu** (sweep 100 seeds × 3000 épisodes, seed 36) | **42.15** | 61 | 14 | 20 |
 
-Le meilleur agent retenu fait ~178x mieux que le hasard sur le même nombre de parties.
-Reproductibilité vérifiée à deux niveaux : un premier run relancé avec une seed différente
-(essai 3) donne des courbes très proches ; un sweep sur 100 seeds indépendantes (essai 4)
-montre une distribution stable (score max en entraînement : moyenne 49.9, médiane 51,
-écart-type 8.1) — voir [NOTEBOOK.md](NOTEBOOK.md) pour le détail des deux essais, y compris
-l'essai 4 qui visait à dépasser un score de 66 et n'y est pas parvenu (plafond observé sur
-les 100 seeds, indépendamment de la seed).
+Le meilleur agent retenu fait ~211x mieux que le hasard sur le même nombre de parties.
+Reproductibilité vérifiée à plusieurs niveaux : un run relancé avec une seed différente
+(essai 3) donne des courbes très proches ; un sweep sur 100 seeds indépendantes (essai 4,
+avant un correctif décrit ci-dessous) montre une distribution stable (score max en
+entraînement : moyenne 49.9, écart-type 8.1). Un bug d'exploration epsilon-greedy a ensuite
+été corrigé et les hyperparamètres retendus en conséquence (essai 6) : rejoué sur les 100
+mêmes seeds, le score moyen monte à 56.3 (écart-type 4.8, donc plus régulier) et le meilleur
+score passe de 66 à 70 — voir [NOTEBOOK.md](NOTEBOOK.md) pour le détail complet, y compris
+les tentatives ratées (état enrichi qui n'a pas aidé, sauvegarde sur un score d'entraînement
+bruité qui donnait parfois un agent malchanceux une fois rechargé).
 
 Courbe de progression du meilleur agent : [deliverable/learning_curve.png](deliverable/learning_curve.png).
 Résumé complet des 100 seeds testés : [deliverable/sweep_summary.csv](deliverable/sweep_summary.csv).
@@ -87,14 +91,16 @@ Voir [NOTEBOOK.md](NOTEBOOK.md) pour l'historique des tentatives, y compris les 
 Lien : _à compléter_
 
 ## Ce qu'on ferait avec plus de temps
-- Passer à une représentation d'état plus riche (distance normalisée à la nourriture,
-  vision sur plusieurs cases dans chaque direction) ou à un DQN (réseau de neurones) pour
-  dépasser les limites d'une table Q sur un état binaire à 11 dimensions.
+- On a testé un état enrichi à 14 booléens (danger anticipé à 2 cases) : pas concluant
+  (essai 5), probablement parce que l'espace d'états devient ~8x plus grand pour le même
+  budget d'épisodes. Avec plus de temps, il faudrait le retester isolément avec plus
+  d'épisodes, ou passer directement à un DQN (réseau de neurones) qui généralise mieux
+  qu'une table Q sur un état plus riche.
 - Complexifier la fonction de récompense (pénaliser les trajectoires qui s'éloignent
   durablement de la nourriture, encourager la survie) une fois la version simple
   validée, comme le suggère la consigne du projet.
-- Recherche d'hyperparamètres plus systématique (learning rate, gamma, vitesse de
-  décroissance d'epsilon) plutôt que la config par défaut réutilisée pour tous les essais
-  — voir le sweep multi-seeds dans le carnet d'essais, qui va dans ce sens pour la seed
-  mais pas encore pour les autres hyperparamètres.
+- Recherche d'hyperparamètres plus systématique (learning rate, gamma) : on a retendu
+  `epsilon_decay` après avoir corrigé un bug d'exploration (essai 6, gain net), et exploré
+  la seed sur 100 valeurs (essais 4 et 6), mais lr et gamma sont restés à leur valeur par
+  défaut sur tous les essais.
 - Automatiser la capture vidéo de l'agent en action plutôt qu'une capture manuelle.

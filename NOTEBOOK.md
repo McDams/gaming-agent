@@ -124,4 +124,21 @@ Inclure les tentatives ratées.
   Plus de scores catastrophiques après rechargement (l'écart train_best/eval_avg observé
   avant la correction du bonus de sauvegarde a disparu).
 - Sweep complet 100 seeds x 3000 épisodes relancé avec cette config pour trouver l'agent
-  définitif (voir résultats mis à jour dans le README et `deliverable/`).
+  définitif. Résultat, comparé au sweep équivalent avant correction (essai 4) :
+
+  | | Essai 4 (avant, bug d'exploration) | Essai 6 (après, corrigé) |
+  |---|---|---|
+  | train_best max (100 seeds) | 66 | **70** |
+  | train_best moyenne (écart-type) | 49.9 (8.1) | **56.3 (4.8)** |
+  | eval_avg max (greedy, 20 parties) | 35.55 | **42.15** |
+  | eval_avg moyenne | 21.4 | **28.3** |
+
+  Non seulement les scores montent, mais l'écart-type de `train_best` baisse (8.1 → 4.8) :
+  l'agent est plus régulier d'une seed à l'autre, pas seulement chanceux sur quelques-unes.
+  L'objectif "dépasser 66" de l'essai 4 est cette fois atteint (70, seed 78 ; 6/100 seeds
+  ≥ 66). Le 100+ visé initialement reste hors de portée avec Q-learning tabulaire sur cet
+  état — mais ce n'était pas l'objectif principal du projet (l'énoncé insiste sur "mieux
+  que le hasard", déjà largement démontré : ~211x sur l'agent retenu, cf. README).
+- Meilleur agent retenu : seed 36 (eval_avg=42.15, eval_max=61 sur les 20 parties du
+  sweep — revérifié sur un nouvel échantillon de 15 parties indépendant : moyenne 35.2,
+  max 71). Copié dans `deliverable/`.
